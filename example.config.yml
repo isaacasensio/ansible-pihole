@@ -1,0 +1,38 @@
+---
+# Security configuration.
+security_sudoers_passwordless: ['pi']
+security_autoupdate_mail_to: "admin@rpi.com"
+security_autoupdate_enabled: true
+security_autoupdate_reboot: true
+security_autoupdate_reboot_time: "03:00"
+security_fail2ban_enabled: true
+firewall_allowed_tcp_ports:
+  - 22
+  - 53
+  - 53/udp
+  - 67/udp
+  - 547/udp
+  - 443
+  - 80
+  - 4711
+
+# Raspberry pi 
+pi_username: pi
+
+# Python configuration.
+pip_package: python3-pip
+pip_executable: pip3
+
+# Docker configuration
+docker_pip_executable: '{{ pip_executable }}'
+docker_version_arm64: 5:20.10.7~3-0~ubuntu-focal
+docker_users:
+  - pi
+
+# Pi-hole configuration.
+pihole_enable: true
+pihole_hostname: pihole
+pihole_timezone: Europe/Madrid
+pihole_password: "change-this-password"
+pihole_ftl_max_db_days: "180"
+pihole_dns: "8.8.8.8"

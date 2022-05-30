@@ -1,0 +1,5 @@
+inventory.ini
+config.yml
+roles/geerlingguy.*
+.DS_Store
+.vagrant

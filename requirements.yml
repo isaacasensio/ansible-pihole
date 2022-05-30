@@ -1,0 +1,12 @@
+---
+roles:
+  - geerlingguy.security
+  - geerlingguy.firewall
+  - geerlingguy.git
+  - geerlingguy.pip
+  - geerlingguy.docker_arm
+
+collections:
+  - ansible.posix
+  - community.docker
+  - community.general

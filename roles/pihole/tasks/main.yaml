@@ -1,0 +1,127 @@
+---
+# Reasoning: https://github.com/pi-hole/docker-pi-hole#installing-on-ubuntu
+- name: Ensure systemd-resolved.service is stopped
+  ansible.builtin.systemd:
+    state: stopped
+    name: systemd-resolved
+  become: true  
+
+- name: Disable stub resolver
+  ansible.builtin.replace:
+    path: /etc/systemd/resolved.conf
+    regexp: '^#DNSStubListener=yes'
+    replace: 'DNSStubListener=no'
+  become: true  
+
+- name: Remove resolv.conf symbolic link
+  file:
+   path: /etc/resolv.conf
+   state: absent
+  become: true 
+
+- name: Create resolv.conf symbolic link
+  file:
+    src: /run/systemd/resolve/resolv.conf
+    dest: /etc/resolv.conf
+    state: link
+  become: true 
+
+- name: Ensure systemd-resolved.service is started
+  ansible.builtin.systemd:
+    state: started
+    name: systemd-resolved
+  become: true  
+
+- name: Create Pi-hole folder on Pi.
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    mode: 0755
+  loop:
+    - "{{ config_dir }}/pi-hole"
+    - "{{ config_dir }}/pi-hole/dnsmasq.d"
+  become: false
+
+- name: Get IPv6 link local address
+  set_fact:
+    ipv6: "{{ item.address }}"
+  loop: "{{ vars['ansible_' + ansible_default_ipv6.interface | default(ansible_default_ipv4.interface)].ipv6 }}"
+  loop_control:
+    label: "{{ item.address }}"
+  when: "'link' in item.scope"
+
+- name: Set FTLCONF_REPLY_ADDR (single mode)
+  set_fact:
+    ftlconf_reply_addr4: "{{ ansible_host }}"
+    ftlconf_reply_addr6: "{{ ipv6 }}"
+    execution_mode: "single node setup"
+
+- name: Start/Update pihole container
+  become: true
+  docker_container:
+    name: pihole
+    image: "{{ pihole_image }}"
+    pull: yes
+    restart_policy: unless-stopped
+    ports:
+      - "53:53/tcp"
+      - "53:53/udp"
+      - "67:67/udp" # Only required if you are using Pi-hole as your DHCP server
+      - "80:80/tcp"
+      - "443:443/tcp"
+    capabilities:
+      - NET_ADMIN
+    env:
+      TZ: "{{ pihole_timezone }}"
+      WEBPASSWORD: "{{ pihole_password }}"
+      PIHOLE_DNS_: "{{ pihole_dns }}"
+      FTLCONF_MAXDBDAYS: "{{ pihole_ftl_max_db_days }}"
+    labels: 
+      autoheal: "true"
+    volumes:
+      - './etc-pihole:/etc/pihole'
+      - './etc-dnsmasq.d:/etc/dnsmasq.d'
+    log_driver: json-file
+    log_options:
+      max-size: "10m"
+      max-file: "5"
+
+- name: Check pihole container
+  uri:
+    url: http://localhost
+  register: result
+  until: result.status == 200
+  retries: 5
+  delay: 30
+
+- name: Remove old image versions
+  docker_prune:
+    images: yes
+    images_filters:
+      dangling: false
+
+- name: Restart docker service
+  ansible.builtin.systemd:
+    state: restarted
+    name: docker
+  become: true
+
+- name: INFORMATION
+  debug:
+    msg:
+      - "In the {{ execution_mode }} make sure to point your DNS server settings here:"
+      - "DNSv4: {{ ftlconf_reply_addr4 }}"
+      - "DNSv6: {{ ftlconf_reply_addr6 }}"
+
+- name: Start/Update autoheal container
+  docker_container:
+    name: autoheal
+    image: "willfarrell/autoheal:1.2.0"
+    pull: yes
+    restart_policy: unless-stopped
+    env:
+      AUTOHEAL_CONTAINER_LABEL: all
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock"
+      - "/home/{{ ansible_user }}/pihole/pihole/:/etc/pihole/"
+      - "/home/{{ ansible_user }}/pihole/dnsmasq.d/:/etc/dnsmasq.d/"

@@ -1,0 +1,14 @@
+---
+- hosts: pihole
+  become: true
+
+  vars_files:
+    - config.yml
+
+  roles:
+    - geerlingguy.security
+    - geerlingguy.firewall
+    - geerlingguy.git
+    - geerlingguy.pip
+    - geerlingguy.docker_arm
+    - role: pihole
